@@ -156,12 +156,16 @@ def find_velocity(file_path):
 def find_acceleration(file_path):
 
     #To find change in direction and its velocity
+
+
     Vel, magnitude, timestamp_diff, horz_Vel, vert_Vel, magnitude_vel, horz_vel_mag, vert_vel_mag = find_velocity(file_path)
 
     accl = []
     horz_Accl = []
     vert_Accl = []
     magnitude = []
+    horz_acc_mag = []
+    vert_acc_mag = []
 
     print('No of Coordinates:', len(Vel))
     for i in range(len(Vel) - 1):
@@ -189,6 +193,8 @@ def find_jerk(file_path):
     horz_Jerk = []
     vert_Jerk = []
     magnitude = []
+    horz_jerk_mag = []
+    vert_jerk_mag = []
 
     print('No of Coordinates:', len(accl))
     for i in range(len(accl) - 1):
