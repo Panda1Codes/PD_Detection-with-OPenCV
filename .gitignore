@@ -5,4 +5,9 @@
 !pd.py
 !realtime.py
 
+*.csv
+
+*.ipynb
+
+
 readme.txt
