@@ -1,2 +1,8 @@
 /Dataset/*
 !/Dataset/drawings/
+
+*.py
+!pd.py
+!realtime.py
+
+readme.txt
