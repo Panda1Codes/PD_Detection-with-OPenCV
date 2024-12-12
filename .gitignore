@@ -1,4 +1,2 @@
-/Dataset/hw_dataset/
-/Dataset/hw_drawings/
-/Dataset/new_dataset/
-/Dataset/readme.txt
+/Dataset/*
+!/drawings/
