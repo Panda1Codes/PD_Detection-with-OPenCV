@@ -2,7 +2,6 @@ import os
 import cv2
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-# from lightgbm import LGBMClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score
 from sklearn.preprocessing import LabelEncoder
@@ -13,6 +12,138 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import StackingClassifier, VotingClassifier
 from sklearn.utils import shuffle 
 from sklearn.model_selection import StratifiedKFold
+
+def detect_paper(image):
+    """
+    Detects a rectangular paper-like object in the image.
+
+    Args:
+        image (numpy.ndarray): Input image.
+
+    Returns:
+        list: Coordinates of the four corners of the detected paper, or None if not found.
+    """
+    # Convert to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Apply GaussianBlur
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    # Edge detection using Canny
+    edges = cv2.Canny(blurred, 50, 150)
+
+    # Find contours
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Iterate through contours to find a quadrilateral
+    for contour in contours:
+        # Filter small contours
+        if cv2.contourArea(contour) < 1000:
+            continue
+
+        perimeter = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
+
+        # Check if the contour has four vertices and is convex
+        if len(approx) == 4 and cv2.isContourConvex(approx):
+            return approx.reshape(4, 2)
+
+    return None
+
+
+def apply_perspective_transform(image, corners):
+    """
+    Applies a perspective transform to extract the paper region from the image
+    based on the detected paper's corners.
+
+    Args:
+        image (numpy.ndarray): Input image.
+        corners (list): Coordinates of the four corners of the paper.
+
+    Returns:
+        numpy.ndarray: Warped image with the paper region, or None if failed.
+    """
+    # Order the corners to consistently define the paper
+    corners = sorted(corners, key=lambda x: (x[1], x[0]))
+    top_left, top_right = sorted(corners[:2], key=lambda x: x[0])
+    bottom_left, bottom_right = sorted(corners[2:], key=lambda x: x[0])
+    ordered_corners = np.array([top_left, top_right, bottom_right, bottom_left], dtype='float32')
+
+    # Compute width and height of the paper
+    width_top = np.linalg.norm(top_right - top_left)
+    width_bottom = np.linalg.norm(bottom_right - bottom_left)
+    height_left = np.linalg.norm(top_left - bottom_left)
+    height_right = np.linalg.norm(top_right - bottom_right)
+
+    max_width = int(max(width_top, width_bottom))
+    max_height = int(max(height_left, height_right))
+
+    # Destination points for the perspective transform
+    dst = np.array([
+        [0, 0],
+        [max_width - 1, 0],
+        [max_width - 1, max_height - 1],
+        [0, max_height - 1]
+    ], dtype='float32')
+
+    # Compute the perspective transform matrix
+    matrix = cv2.getPerspectiveTransform(ordered_corners, dst)
+
+    # Apply the perspective warp
+    try:
+        warped = cv2.warpPerspective(image, matrix, (max_width, max_height))
+        return warped
+    except cv2.error as e:
+        print(f"[ERROR] Perspective transform failed: {e}")
+        return None
+
+
+def find_similar_features(img1, img2):
+    """
+    Find similar features between two images using ORB and Harris Corner Detection.
+    """
+    # ORB feature detection
+    orb = cv2.ORB_create()
+    keypoints1, descriptors1 = orb.detectAndCompute(img1, None)
+    keypoints2, descriptors2 = orb.detectAndCompute(img2, None)
+
+    # Harris Corner Detection
+    def detect_harris_corners(image):
+        corners = cv2.cornerHarris(image, blockSize=2, ksize=3, k=0.04)
+        corners = cv2.dilate(corners, None)  # Dilate to enhance corner points
+        threshold = 0.01 * corners.max()
+        keypoints = [cv2.KeyPoint(float(x), float(y), 1) for y, x in zip(*np.where(corners > threshold))]
+        return keypoints
+
+    harris_keypoints1 = detect_harris_corners(img1)
+    harris_keypoints2 = detect_harris_corners(img2)
+
+    # Combine ORB and Harris keypoints
+    combined_keypoints1 = list(keypoints1) + harris_keypoints1 if keypoints1 else harris_keypoints1
+    combined_keypoints2 = list(keypoints2) + harris_keypoints2 if keypoints2 else harris_keypoints2
+
+    # Compute descriptors for the combined keypoints using ORB
+    combined_descriptors1 = orb.compute(img1, combined_keypoints1)[1] if combined_keypoints1 else None
+    combined_descriptors2 = orb.compute(img2, combined_keypoints2)[1] if combined_keypoints2 else None
+
+    if combined_descriptors1 is None or combined_descriptors2 is None:
+        print("[WARNING] One or both descriptor arrays are empty.")
+        return [], []
+
+    if combined_descriptors1.shape[1] != combined_descriptors2.shape[1]:
+        print("[WARNING] Descriptor dimension mismatch.")
+        return [], []
+
+    # Match features using brute-force matcher
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    matches = bf.match(combined_descriptors1, combined_descriptors2)
+    matches = sorted(matches, key=lambda x: x.distance)  # Sort by distance (similarity)
+
+    keypoints_ref = [combined_keypoints1[m.queryIdx].pt for m in matches]
+    keypoints_edge = [combined_keypoints2[m.trainIdx].pt for m in matches]
+
+    return keypoints_ref, keypoints_edge
+
 
 def apply_gamma_correction(image, gamma=1.0):
     """
@@ -107,7 +238,7 @@ def train_model(trainingPaths):
 
     # Define and train Random Forest model
     print("[INFO] Training Random Forest model...")
-    model = RandomForestClassifier(n_estimators=120, max_depth=7, min_samples_split=3, min_samples_leaf=1, random_state=42, max_features="log2")
+    model = RandomForestClassifier(n_estimators=51, max_depth=6, min_samples_split=6, min_samples_leaf=2, random_state=42, max_features="log2")
     model.fit(data, labels)
 
     # Evaluate Training Accuracy
@@ -290,31 +421,17 @@ def main():
     # Load testing data
     testX, testY = [], []
     for path in testingPaths:
-        data, labels = load_testing_data(path)  # Define a function to load testing data
+        data, labels = load_testing_data(path)
         testX.extend(data)
         testY.extend(labels)
 
     testX = np.array(testX)
     testY = np.array(testY)
 
-    # # Compute testing accuracy
-    # predictions = ensemble.predict(testX)
-    # testing_accuracy = np.mean(predictions == testY) * 100
-    # print(f"Testing Accuracy: {testing_accuracy:.2f}%")
-
-    # Combine train (data, labels) and test (testX, testY) for overall accuracy
-    combined_X = np.vstack([data, testX])  # data is the training features
-    combined_Y = np.hstack([labels, testY])  # labels are the training labels
-
-    # Predict combined accuracy
-    combined_predictions = ensemble.predict(combined_X)
-    overall_accuracy = np.mean(combined_predictions == combined_Y) * 100
-    print(f"Overall Accuracy: {overall_accuracy:.2f}%")
-
-    scores = cross_val_score(ensemble, data, labels, cv=5, scoring="accuracy")
-    print(f"Cross-Validation Accuracy: {np.mean(scores) * 100:.2f}%")
-
-
+    # Compute testing accuracy
+    predictions = ensemble.predict(testX)
+    testing_accuracy = np.mean(predictions == testY) * 100
+    print(f"Testing Accuracy: {testing_accuracy:.2f}%")
 
     print("[INFO] Starting real-time detection...")
     cap = cv2.VideoCapture(0)
@@ -322,39 +439,49 @@ def main():
     while True:
         ret, frame = cap.read()
         if not ret:
-            print("[ERROR] Unable to capture frame. Exiting...") 
+            print("[ERROR] Unable to capture frame. Exiting...")
             break
 
         # Process frame with Gamma Correction and Gaussian Blur
         processed_frame = process_frame_for_detection(frame, gamma=1.2, blur_ksize=(5, 5))
 
+        # Detect paper corners
+        paper_corners = detect_paper(processed_frame)
 
-#display the live feed with instructions
-        frame_copy = frame.copy()
-        cv2.putText(frame_copy, "Press 's' to classify or 'q' to quit", (10, 30),
+        if paper_corners is not None:
+            # Draw the detected paper region on the frame
+            cv2.polylines(frame, [np.int32(paper_corners)], isClosed=True, color=(0, 255, 0), thickness=2)
+            warped_frame = apply_perspective_transform(frame, paper_corners)
+            if warped_frame is not None:
+                # Show the warped paper region
+                cv2.imshow("Warped Paper", warped_frame)
+
+                # Classify the detected paper region
+                detected_label = classify_image(ensemble, label_encoder, warped_frame)
+                print(f"[INFO] Detected: {detected_label}")
+
+                # Compare with reference
+                reference_path = healthy_reference if detected_label == "healthy" else unhealthy_reference
+                title = "Healthy Reference" if detected_label == "healthy" else "Unhealthy Reference"
+                compare_with_reference(warped_frame, reference_path, title, training_accuracy, testing_accuracy)
+
+        else:
+            cv2.putText(frame, "No paper detected", (10, 60),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+
+        # Display real-time feed
+        cv2.putText(frame, "Press 's' to classify, 'q' to quit", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        cv2.imshow("Real-Time Detection", frame_copy)
+        cv2.imshow("Real-Time Detection", frame)
 
         key = cv2.waitKey(1) & 0xFF
-
-
-        if key == ord("s"):
-            detected_label = classify_image(ensemble, label_encoder, frame)
-            print(f"[INFO] Detected: {detected_label}")
-
-            reference_path = healthy_reference if detected_label == "healthy" else unhealthy_reference
-            title = "Healthy Reference" if detected_label == "healthy" else "Unhealthy Reference"
-
-            compare_with_reference(frame, reference_path, title, training_accuracy, overall_accuracy)
-
         if key == ord("q"):
             print("[INFO] Exiting...")
             break
 
     cap.release()
     cv2.destroyAllWindows()
-
-
+    
 
 if __name__ == "__main__":
     main()
