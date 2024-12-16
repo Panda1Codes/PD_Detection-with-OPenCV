@@ -5,9 +5,6 @@ from sklearn.ensemble import RandomForestClassifier
 from lightgbm import LGBMClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score
-# from sklearn.neighbors import KNeighborsClassifier
-# from xgboost import XGBClassifier
-# from sklearn.svm import SVC
 from sklearn.preprocessing import LabelEncoder
 from skimage import feature
 from skimage.feature import local_binary_pattern
@@ -34,8 +31,6 @@ def preprocess_image(image, resize_dim=(200, 200)):
     """
     Preprocesses an image: converts to grayscale, resizes, and thresholds.
     """
-    # image = cv2.normalize(image, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-
     if len(image.shape) > 2:  # Check if the image is not already grayscale
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     image = cv2.resize(image, resize_dim)
@@ -73,80 +68,6 @@ def augment_image(image):
     M = cv2.getRotationMatrix2D((cols / 2, rows / 2), 15, 1)
     rotated = cv2.warpAffine(image, M, (cols, rows))
     return rotated
-
-#Training the model
-# def train_model(trainingPaths):
-#     data, labels = [], []
-#     for path in trainingPaths:
-#         imagePaths = [os.path.join(path, subdir, img) 
-#                       for subdir in ["healthy", "parkinson"]
-#                       for img in os.listdir(os.path.join(path, subdir))]
-        
-#         for imgPath in imagePaths:
-#             label = os.path.basename(os.path.dirname(imgPath))
-#             image = cv2.imread(imgPath)
-#             if image is None:
-#                 print(f"[WARNING] Could not read image {imgPath}. Skipping.")
-#                 continue
-#             preprocessed = preprocess_image(image)
-#             augmented = augment_image(preprocessed)
-
-#             features = extract_features(preprocessed)
-#             augmented_features = extract_features(augmented)
-
-#             data.append(features)
-#             labels.append(label)
-#             data.append(augmented_features)
-#             labels.append(label)
-
-#     data, labels = shuffle(data, labels, random_state=42)
-#     le = LabelEncoder()
-#     labels = le.fit_transform(labels)
-
-#     #hyperparameter tuning for enhance and resize image to get more better features:
-#     param_grid = {
-#         'n_estimators': [100, 200],
-#         'max_depth': [3, 5],
-#         'learning_rate': [0.01, 0.1],
-#         'subsample': [0.8, 1.0]
-#     }
-
-#     # model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
-#     # model.fit(data, labels)
-
-#     # model = LGBMClassifier(n_estimators=100, max_depth=-1, random_state=42)
-#     # model.fit(data, labels)
-    
-#     # # model = KNeighborsClassifier(n_neighbors=3)
-#     # # model.fit(data, labels)   
-
-#     # # model = LogisticRegression(max_iter=1000, random_state=42)
-#     # # model.fit(data,labels)
-
-#     # model = SVC(kernel="rbf", C=1.0, gamma="scale", random_state=42)
-#     # model.fit(data,labels)
-
-#     xgb = XGBClassifier(eval_metric="logloss", random_state=42)
-#     grid_search = GridSearchCV(estimator=xgb, param_grid=param_grid, scoring ='accuracy', cv=3, verbose=1)
-#     grid_search.fit(data, labels)
-
-#     print(f"[INFO] Best Parameters: {grid_search.best_params_}")
-#     model = grid_search.best_estimator_
-
-#     #Ensemeble Model
-#     rf_model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
-#     rf_model.fit(data, labels)
-
-#     ensemble = StackingClassifier(estimators=[
-#         ('rf', rf_model),
-#         ('xgb', model)
-#     ], final_estimator=RandomForestClassifier(n_estimators=100, random_state=42))
-#     ensemble.fit(data, labels)
-
-#     predictions = ensemble.predict(data)
-#     accuracy = np.mean(predictions == labels) * 100
-#     print(f"Training Accuracy: {accuracy:.2f}%")
-#     return ensemble, le, accuracy
 
 
 def train_model(trainingPaths):
