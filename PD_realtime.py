@@ -2,7 +2,7 @@ import os
 import cv2
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from lightgbm import LGBMClassifier
+# from lightgbm import LGBMClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score
 from sklearn.preprocessing import LabelEncoder
@@ -40,10 +40,17 @@ def preprocess_image(image, resize_dim=(200, 200)):
 
 def extract_features(image, P=8, R=1):
     # Compute HOG features
-    hog_features = feature.hog(image, orientations=9, 
-                                pixels_per_cell=(10, 10), 
-                                cells_per_block=(2, 2), 
-                                transform_sqrt=True, block_norm="L1")
+    # Initialize the HOG Descriptor
+    hog = cv2.HOGDescriptor(_winSize=(image.shape[1] // 10 * 10, image.shape[0] // 10 * 10),
+                            _blockSize=(20, 20),  # cells_per_block (2x2) * pixels_per_cell (10x10)
+                            _blockStride=(10, 10),  # same as pixels_per_cell
+                            _cellSize=(10, 10),
+                            _nbins=9)
+
+    # Compute HOG features
+    hog_features = hog.compute(image)
+    hog_features = hog_features.flatten()  # Flatten the result into a 1D array
+
 
     # Find contours to calculate additional features
     contours, _ = cv2.findContours(image.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -100,7 +107,7 @@ def train_model(trainingPaths):
 
     # Define and train Random Forest model
     print("[INFO] Training Random Forest model...")
-    model = RandomForestClassifier(n_estimators=200, max_depth=10, min_samples_split=4, random_state=42)
+    model = RandomForestClassifier(n_estimators=120, max_depth=7, min_samples_split=3, min_samples_leaf=1, random_state=42, max_features="log2")
     model.fit(data, labels)
 
     # Evaluate Training Accuracy
