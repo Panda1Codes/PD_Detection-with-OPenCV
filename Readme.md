@@ -58,7 +58,20 @@ pip install numpy
 
 ## Dataset Structure
 
-![alt text](drwaings.png)
+                                             [Drawings]
+                                                 |
+                              +---------------------+---------------------+
+                         [Spriral]                                     [Wave]
+                              |                                           |
+                   +----------+----------+                     +----------+----------+
+             [training]             [testing]             [training]             [testing]
+                 |                      |                      |                     |           
+          +------+------+       +------+------+         +------+------+       +------+------+
+          |             |       |             |         |             |       |             |
+      [healthy]  [parkinson] [healthy] [parkinson]  [healthy]  [parkinson]  [healthy]  [parkinson]
+                        
+
+
 
 ## Model Structure
                  [Load & Preprocess Data]
