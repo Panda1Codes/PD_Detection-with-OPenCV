@@ -2,9 +2,7 @@
 
 *Team members: Priyanka, Ui-Joon, Seung-Hyuk, Su-Bin*
 
-#### This project implements a system to detect Parkinson's Disease (PD) based on spiral or wave drawings provided by individuals. The system uses machine learning algorithms to 
-#### classify images into healthy or parkinson categories. The detection process involves real-time video input, preprocessing, feature extraction, and classification. OpenCV is used 
-#### extensively for image processing, and a Random Forest classifier is employed for robust and interpretable predictions.
+#### This project implements a system to detect Parkinson's Disease (PD) based on spiral or wave drawings provided by individuals. The system uses machine learning algorithms to classify images into healthy or parkinson categories. The detection process involves real-time video input, preprocessing, feature extraction, and classification. OpenCV is used extensively for image processing, and a Random Forest classifier is employed for robust and interpretable predictions.
 
 
 ## Features ##
